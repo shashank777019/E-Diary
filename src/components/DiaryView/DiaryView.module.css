@@ -1,0 +1,179 @@
+/*DiaryView.module.css*/
+.diaryViewContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  padding-top: 0; /* Navbar is fixed */
+  min-height: calc(100vh - 70px); /* Full height minus navbar */
+  box-sizing: border-box;
+}
+
+.loading, .error {
+  font-size: 1.5em;
+  margin-top: 50px;
+  color: #777;
+}
+body.dark-theme .loading, body.dark-theme .error {
+  color: #aaa;
+}
+
+.diaryHeader {
+  width: 100%;
+  max-width: 900px; /* Max width of the notebook area */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.diaryHeader h2 {
+  font-size: 1.8em;
+  color: #444;
+}
+body.dark-theme .diaryHeader h2 {
+  color: #ccc;
+}
+
+.headerControls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.controlButton, .controlButtonSmall {
+  background-color: #f0f0f0;
+  border: 1px solid #ccc;
+  padding: 8px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-size: 0.9em;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+body.dark-theme .controlButton, body.dark-theme .controlButtonSmall {
+  background-color: #3a3a5a;
+  border-color: #555;
+  color: #e0e0e0;
+}
+
+.controlButton:hover, .controlButtonSmall:hover {
+  background-color: #e0e0e0;
+}
+body.dark-theme .controlButton:hover, body.dark-theme .controlButtonSmall:hover {
+  background-color: #4a4a6a;
+}
+
+.saveButton {
+  background-color: #6f42c1; /* A distinct save button color */
+  color: white;
+  border-color: #6f42c1;
+}
+body.dark-theme .saveButton {
+  background-color: #8a63d2;
+  border-color: #8a63d2;
+}
+.saveButton:hover {
+  background-color: #5a3e8d;
+}
+body.dark-theme .saveButton:hover {
+  background-color: #754fbb;
+}
+
+
+.goToPageForm {
+  display: flex;
+  align-items: center;
+}
+
+.goToPageInput {
+  width: 70px;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 5px 0 0 5px;
+  font-size: 0.9em;
+  text-align: center;
+}
+body.dark-theme .goToPageInput {
+  background-color: #2c2c44;
+  border-color: #555;
+  color: #e0e0e0;
+}
+
+.controlButtonSmall {
+  border-radius: 0 5px 5px 0;
+  padding: 8px 10px; /* Adjusted padding */
+}
+
+
+.notebook {
+  display: flex;
+  align-items: center; /* Align arrows with the page container */
+  justify-content: center; /* Center page content horizontally */
+  width: 100%;
+  max-width: 900px; /* Control notebook width */
+  position: relative; /* For absolute positioning of arrows if needed */
+}
+
+.pageContainer {
+  /* This will hold the Page component.
+     The Page component itself will define its dimensions and background.
+     Adding a slight perspective for page curl later if needed. */
+  perspective: 1500px;
+  margin: 0 10px; /* Space for arrows */
+  /* border: 1px solid #ccc; */ /* Optional: border around the page area */
+  box-shadow: 0 0 20px rgba(0,0,0,0.1);
+}
+body.dark-theme .pageContainer {
+  box-shadow: 0 0 20px rgba(0,0,0,0.3);
+}
+
+
+.navArrow {
+  background: none;
+  border: none;
+  font-size: 2em; /* Make arrows larger */
+  color: #555;
+  cursor: pointer;
+  padding: 10px;
+  transition: color 0.2s, transform 0.2s;
+  z-index: 10; /* Ensure arrows are clickable */
+}
+body.dark-theme .navArrow {
+  color: #bbb;
+}
+
+.navArrow:hover {
+  color: #000;
+  transform: scale(1.1);
+}
+body.dark-theme .navArrow:hover {
+  color: #fff;
+}
+
+.navArrow:disabled {
+  color: #ccc;
+  cursor: not-allowed;
+  transform: none;
+}
+body.dark-theme .navArrow:disabled {
+  color: #666;
+}
+
+.prevArrow {
+  margin-right: 15px;
+}
+.nextArrow {
+  margin-left: 15px;
+}
+
+.pageIndicator {
+    margin-top: 15px;
+    font-size: 0.9em;
+    color: #666;
+}
+body.dark-theme .pageIndicator {
+    color: #aaa;
+}
