@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Page from './Page/Page';
-import styles from './DiaryView.module.css'; 
+import styles from './DiaryView.module.css';
 import pageStyles from './Page/Page.module.css'; 
 import { FaArrowLeft, FaArrowRight, FaSave, FaHome } from 'react-icons/fa';
 
-const ANIMATION_DURATION = 600; // ms, matches CSS animation
+const ANIMATION_DURATION = 500; 
+const SAVE_DEBOUNCE_DELAY = 500; 
 
 const DiaryView = ({ diaries, setDiaries }) => {
   const { diaryId } = useParams();
@@ -14,69 +15,64 @@ const DiaryView = ({ diaries, setDiaries }) => {
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [goToPageInput, setGoToPageInput] = useState('');
   const [lastEditPosition, setLastEditPosition] = useState(0);
-  const [pageTurnState, setPageTurnState] = useState({ animatingPageId: null, direction: null });
+  const [pageTurnState, setPageTurnState] = useState({ animatingPageId: null, direction: null, isFinalTurn: false });
 
-  // Effect to initialize and update currentDiary and currentPageIndex
+  const isInitialLoadForDiaryIdRef = useRef(true);
+  const debounceTimeoutRef = useRef(null);
+
   useEffect(() => {
     const foundDiary = diaries.find(d => d.id === diaryId);
     if (foundDiary) {
-      let initialPages = [...foundDiary.pages];
-      let diaryToSet = { ...foundDiary };
+        let pages = [...(foundDiary.pages || [])];
+        let diaryToUpdate = { ...foundDiary };
+        let shouldUpdateGlobalDiaries = false;
 
-      if (initialPages.length === 0) {
-        const newPage = {
-          id: `p${Date.now()}`,
-          pageNumber: 1,
-          content: '',
-          date: new Date().toISOString().split('T')[0],
-        };
-        initialPages.push(newPage);
-        diaryToSet.pages = initialPages;
-        diaryToSet.lastEntryDate = new Date().toISOString().split('T')[0];
-        // Update the global diaries state if a new page was added to an empty diary
-        setDiaries(prevDiaries => prevDiaries.map(d => (d.id === diaryToSet.id ? diaryToSet : d)));
-      }
-      
-      setCurrentDiary(diaryToSet); // Set the local currentDiary state
-      const lastPageIdx = initialPages.length > 0 ? initialPages.length - 1 : 0;
-      setCurrentPageIndex(lastPageIdx); // Set initial page index
-      setLastEditPosition(initialPages[lastPageIdx]?.content?.length || 0); // Set initial cursor position
+        if (pages.length === 0) {
+            const newPage = {
+                id: `p${Date.now()}`, pageNumber: 1, content: '',
+                date: new Date().toISOString().split('T')[0],
+            };
+            pages.push(newPage);
+            diaryToUpdate.pages = pages;
+            diaryToUpdate.lastEntryDate = new Date().toISOString().split('T')[0];
+            shouldUpdateGlobalDiaries = true;
+        }
+        
+        setCurrentDiary(diaryToUpdate);
 
+        if (shouldUpdateGlobalDiaries) {
+            setDiaries(prevDiaries => prevDiaries.map(d => (d.id === diaryToUpdate.id ? diaryToUpdate : d)));
+        }
+
+        if (isInitialLoadForDiaryIdRef.current) {
+            const lastPageIdx = pages.length > 0 ? pages.length - 1 : 0;
+            setCurrentPageIndex(lastPageIdx);
+            setLastEditPosition(pages[lastPageIdx]?.content?.length || 0);
+            isInitialLoadForDiaryIdRef.current = false;
+        } else {
+            const currentPagesCount = pages.length;
+            const safeIndex = Math.min(Math.max(0, currentPageIndex), currentPagesCount > 0 ? currentPagesCount - 1 : 0);
+            if (currentPageIndex !== safeIndex || currentPageIndex >= currentPagesCount) {
+                setCurrentPageIndex(safeIndex);
+                setLastEditPosition(pages[safeIndex]?.content?.length || 0);
+            }
+        }
     } else {
-      // If diary is not found, navigate to home.
-      // Consider showing a "Diary not found" message before navigating.
-      navigate('/');
+        navigate('/');
     }
-  }, [diaryId, diaries, navigate, setDiaries]); // Dependencies for initialization
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diaryId, diaries, navigate]); 
 
-
-  // Effect to ensure currentPageIndex is always valid after currentDiary.pages might have changed
-  // This hook is now placed before any early returns that depend on currentDiary.
   useEffect(() => {
-    if (currentDiary && currentDiary.pages && currentDiary.pages.length > 0) {
-      const safeIndex = Math.min(Math.max(0, currentPageIndex), currentDiary.pages.length - 1);
-      if (currentPageIndex !== safeIndex) {
-        setCurrentPageIndex(safeIndex);
-        // Optionally, adjust lastEditPosition here if needed, though it's often set by navigation actions
-        // setLastEditPosition(currentDiary.pages[safeIndex]?.content?.length || 0);
-      }
-    } else if (currentDiary && (!currentDiary.pages || currentDiary.pages.length === 0)) {
-      // If diary exists but has no pages (e.g., after deleting all pages, though current logic adds one if empty)
-      // Reset to page 0 (or handle as appropriate for your app's logic)
-      // This scenario should be less common with the initial page creation logic.
-      if (currentPageIndex !== 0) {
-        setCurrentPageIndex(0);
-        setLastEditPosition(0);
-      }
-    }
-  }, [currentDiary, currentPageIndex]); // Re-run if currentDiary or currentPageIndex changes
+    isInitialLoadForDiaryIdRef.current = true;
+  }, [diaryId]);
 
 
   const ensurePageExists = useCallback((currentPagesArray, indexToEnsure) => {
     let pages = [...currentPagesArray];
     while (indexToEnsure >= pages.length) {
       pages.push({
-        id: `p${Date.now()}_${pages.length}`, 
+        id: `p${Date.now()}_${pages.length}`,
         pageNumber: pages.length + 1,
         content: '',
         date: new Date().toISOString().split('T')[0],
@@ -87,173 +83,246 @@ const DiaryView = ({ diaries, setDiaries }) => {
 
   const saveDiary = useCallback((pagesToSave) => {
     if (!currentDiary) return;
+    const renumberedPages = pagesToSave.map((page, index) => ({
+        ...page,
+        pageNumber: index + 1,
+    }));
+
     const updatedDiary = {
       ...currentDiary,
-      pages: pagesToSave,
+      pages: renumberedPages,
       lastEntryDate: new Date().toISOString().split('T')[0],
     };
-    setCurrentDiary(updatedDiary);
+    setCurrentDiary(updatedDiary); 
     setDiaries(prevDiaries => prevDiaries.map(d => (d.id === updatedDiary.id ? updatedDiary : d)));
   }, [currentDiary, setDiaries]);
 
-  const handleContentChange = useCallback((pageId, newContent) => {
+
+  const debouncedSaveDiary = useCallback((pagesToSave) => {
+    if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+    }
+    debounceTimeoutRef.current = setTimeout(() => {
+      saveDiary(pagesToSave);
+    }, SAVE_DEBOUNCE_DELAY);
+  }, [saveDiary]); 
+
+  const manualSaveDiary = useCallback((pagesToSave) => {
+    if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+    }
+    saveDiary(pagesToSave);
+  }, [saveDiary]);
+
+
+  const handleContentChange = useCallback((pageId, newContent, isOverflowSplit = false) => {
     if (!currentDiary) return;
+    
     const updatedPages = currentDiary.pages.map(page =>
       page.id === pageId
         ? { ...page, content: newContent, date: new Date().toISOString().split('T')[0] }
         : page
     );
-    saveDiary(updatedPages);
-    setLastEditPosition(newContent.length);
-  }, [currentDiary, saveDiary]);
+    
+    setCurrentDiary(prev => ({...prev, pages: updatedPages, lastEntryDate: new Date().toISOString().split('T')[0]}));
+    
+    if (!isOverflowSplit) {
+        debouncedSaveDiary(updatedPages);
+    }
+
+    if (!pageTurnState.animatingPageId && !pageTurnState.isFinalTurn) {
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+             if (document.activeElement === range.startContainer || document.activeElement?.contains(range.startContainer) ) {
+                setLastEditPosition(range.startOffset);
+            } else {
+                 setLastEditPosition(newContent.length);
+            }
+        } else {
+            setLastEditPosition(newContent.length);
+        }
+    }
+  }, [currentDiary, debouncedSaveDiary, pageTurnState.animatingPageId, pageTurnState.isFinalTurn]);
+
 
   const handleContentMovement = useCallback((overflowText, direction) => {
-    if (!currentDiary || pageTurnState.animatingPageId) return; 
-    let pagesCopy = [...currentDiary.pages];
-    const currentIndex = currentPageIndex; // Use a stable value for current index
+    if (!currentDiary || !currentDiary.pages || pageTurnState.isFinalTurn) return; 
+    
+    let pagesCopy = currentDiary.pages.map(p => ({...p}));
+    const currentIndex = currentPageIndex;
+    const pageBeingAnimatedId = pagesCopy[currentIndex]?.id;
 
     if (direction === 'next') {
-      const currentContent = pagesCopy[currentIndex].content;
-      const lines = currentContent.split(/\r?\n/);
-      pagesCopy[currentIndex].content = lines.slice(0, 18).join('\n'); // MAX_LINES is 18
-      
       const nextPageIndex = currentIndex + 1;
       pagesCopy = ensurePageExists(pagesCopy, nextPageIndex);
 
-      if (nextPageIndex < pagesCopy.length) { // Ensure the next page actually exists after ensurePageExists
-        pagesCopy[nextPageIndex].content = overflowText + '\n' + (pagesCopy[nextPageIndex].content || '');
-        saveDiary(pagesCopy);
-        setPageTurnState({ animatingPageId: pagesCopy[currentIndex].id, direction: 'next' });
-        setTimeout(() => {
-          setCurrentPageIndex(nextPageIndex);
-          setLastEditPosition(overflowText.length);
-          setPageTurnState({ animatingPageId: null, direction: null });
-        }, ANIMATION_DURATION);
-      }
-    } else if (direction === 'prev') { // Moving content to the previous page (e.g. backspace at start)
-      if (currentIndex === 0) return; // Cannot move content to a page before the first one
-      const prevIdx = currentIndex - 1;
-      pagesCopy[prevIdx].content += '\n' + pagesCopy[currentIndex].content;
-      pagesCopy[currentIndex].content = ''; 
-      // Optional: Logic to remove the current page if it's now empty and not the only page.
-      // For simplicity, we're just clearing its content.
-      saveDiary(pagesCopy);
-      setPageTurnState({ animatingPageId: pagesCopy[currentIndex].id, direction: 'prev' });
-      setTimeout(() => {
-        setCurrentPageIndex(prevIdx);
-        setLastEditPosition(pagesCopy[prevIdx].content.length);
-        setPageTurnState({ animatingPageId: null, direction: null });
-      }, ANIMATION_DURATION);
-    }
-  }, [currentDiary, currentPageIndex, saveDiary, ensurePageExists, pageTurnState.animatingPageId]);
+      if (nextPageIndex < pagesCopy.length) {
+        pagesCopy[nextPageIndex].content = (overflowText || "") + (pagesCopy[nextPageIndex].content || '');
+        pagesCopy[nextPageIndex].date = new Date().toISOString().split('T')[0];
+        
+        manualSaveDiary(pagesCopy); 
 
-  const navigateToPreviousPage = useCallback(() => {
-    if (!currentDiary || currentPageIndex === 0 || pageTurnState.animatingPageId) return;
-    const pageToAnimateId = currentDiary.pages[currentPageIndex].id;
-    setPageTurnState({ animatingPageId: pageToAnimateId, direction: 'prev' });
-    setTimeout(() => {
-      const prevIdx = currentPageIndex - 1;
-      setCurrentPageIndex(prevIdx);
-      setLastEditPosition(currentDiary.pages[prevIdx]?.content?.length || 0);
-      setPageTurnState({ animatingPageId: null, direction: null });
-    }, ANIMATION_DURATION);
-  }, [currentDiary, currentPageIndex, pageTurnState.animatingPageId]);
+        setCurrentPageIndex(nextPageIndex);
+        setLastEditPosition(0); 
 
-  const navigateToNextPage = useCallback(() => {
-    if (!currentDiary || pageTurnState.animatingPageId) return;
-    
-    const pageToAnimateId = currentDiary.pages[currentPageIndex].id;
-    setPageTurnState({ animatingPageId: pageToAnimateId, direction: 'next' });
-
-    setTimeout(() => {
-      let newPageIndex = currentPageIndex + 1;
-      let pagesArray = [...currentDiary.pages]; // Work with a copy
-
-      if (newPageIndex >= pagesArray.length) { // If trying to go beyond the last page
-        pagesArray = ensurePageExists(pagesArray, newPageIndex);
-        if (pagesArray.length > currentDiary.pages.length) { // If a new page was actually added
-          saveDiary(pagesArray); 
+        if (pageBeingAnimatedId) { 
+            setPageTurnState({ animatingPageId: pageBeingAnimatedId, direction: 'next', isFinalTurn: true });
+            setTimeout(() => {
+                setPageTurnState({ animatingPageId: null, direction: null, isFinalTurn: false });
+            }, ANIMATION_DURATION);
         }
       }
-      
-      setCurrentPageIndex(newPageIndex);
-      // Ensure pagesArray[newPageIndex] exists before trying to access its content
-      setLastEditPosition(pagesArray[newPageIndex]?.content?.length || 0);
-      setPageTurnState({ animatingPageId: null, direction: null });
-    }, ANIMATION_DURATION);
+    } else if (direction === 'prev') { 
+      if (currentIndex === 0) return; 
 
-  }, [currentDiary, currentPageIndex, ensurePageExists, saveDiary, pageTurnState.animatingPageId]);
+      const prevIdx = currentIndex - 1;
+      let finalPagesArray = [...pagesCopy];
+      let wasPageRemoved = false;
+      
+      if (pagesCopy[currentIndex]?.content === '' && pagesCopy.length > 1) {
+        finalPagesArray.splice(currentIndex, 1);
+        wasPageRemoved = true;
+      }
+      
+      setCurrentPageIndex(prevIdx); 
+      const prevPageContent = finalPagesArray[prevIdx]?.content || '';
+      setLastEditPosition(prevPageContent.length);
+
+      if (wasPageRemoved) {
+        manualSaveDiary(finalPagesArray); 
+      }
+      
+      if (pageBeingAnimatedId) {
+        setPageTurnState({ animatingPageId: pageBeingAnimatedId, direction: 'prev', isFinalTurn: true });
+        setTimeout(() => {
+          setPageTurnState({ animatingPageId: null, direction: null, isFinalTurn: false });
+        }, ANIMATION_DURATION);
+      }
+    }
+  }, [currentDiary, currentPageIndex, manualSaveDiary, ensurePageExists, pageTurnState.isFinalTurn, setCurrentPageIndex, setLastEditPosition]);
+
+  const triggerPageTurn = useCallback((direction) => {
+    if (!currentDiary || pageTurnState.isFinalTurn) return;
+
+    const pageToAnimateId = currentDiary.pages[currentPageIndex]?.id;
+    if (!pageToAnimateId) return;
+
+    setPageTurnState({ animatingPageId: pageToAnimateId, direction: direction, isFinalTurn: true });
+
+    setTimeout(() => {
+        if (direction === 'next') {
+            let newPageIndex = currentPageIndex + 1;
+            let pagesArray = [...currentDiary.pages];
+            if (newPageIndex >= pagesArray.length) {
+                pagesArray = ensurePageExists(pagesArray, newPageIndex);
+                if (pagesArray.length > currentDiary.pages.length) manualSaveDiary(pagesArray);
+            }
+            setCurrentPageIndex(newPageIndex);
+            setLastEditPosition(0);
+        } else if (direction === 'prev') {
+            if (currentPageIndex === 0) { 
+                 setPageTurnState({ animatingPageId: null, direction: null, isFinalTurn: false });
+                 return;
+            }
+            const prevIdx = currentPageIndex - 1;
+            setCurrentPageIndex(prevIdx);
+            setLastEditPosition(currentDiary.pages[prevIdx]?.content?.length || 0);
+        }
+        setPageTurnState({ animatingPageId: null, direction: null, isFinalTurn: false });
+    }, ANIMATION_DURATION);
+  }, [currentDiary, currentPageIndex, ensurePageExists, manualSaveDiary, pageTurnState.isFinalTurn]);
+
+
+  const navigateToPreviousPage = useCallback(() => {
+    if (currentPageIndex > 0) triggerPageTurn('prev');
+  }, [currentPageIndex, triggerPageTurn]);
+
+  const navigateToNextPage = useCallback(() => {
+     triggerPageTurn('next');
+  }, [triggerPageTurn]);
+
 
   const handleGoToPage = (e) => {
     e.preventDefault();
-    if (!currentDiary || pageTurnState.animatingPageId) return;
+    if (!currentDiary || pageTurnState.isFinalTurn) return;
     const pageNum = parseInt(goToPageInput, 10);
-    // Ensure currentDiary.pages is not undefined before accessing its length
     const numPages = currentDiary.pages ? currentDiary.pages.length : 0;
 
     if (pageNum >= 1 && pageNum <= numPages) {
       const targetIndex = pageNum - 1;
-      const direction = targetIndex > currentPageIndex ? 'next' : (targetIndex < currentPageIndex ? 'prev' : null);
-      
-      if (direction && targetIndex !== currentPageIndex) { // Only animate if actually changing page
-        setPageTurnState({ animatingPageId: currentDiary.pages[currentPageIndex].id, direction });
-        setTimeout(() => {
-          setCurrentPageIndex(targetIndex);
-          setLastEditPosition(currentDiary.pages[targetIndex]?.content?.length || 0);
-          setPageTurnState({ animatingPageId: null, direction: null });
-        }, ANIMATION_DURATION);
-      } else { 
-        // If no direction (i.e., targetIndex is same as currentPageIndex) or invalid, just set index
-        setCurrentPageIndex(targetIndex); 
-        setLastEditPosition(currentDiary.pages[targetIndex]?.content?.length || 0);
+      if (targetIndex === currentPageIndex) {
+        setGoToPageInput('');
+        return;
       }
+      const direction = targetIndex > currentPageIndex ? 'next' : 'prev';
+      
+      const pageToAnimateId = currentDiary.pages[currentPageIndex]?.id;
+      if(pageToAnimateId) {
+        setPageTurnState({ animatingPageId: pageToAnimateId, direction: direction, isFinalTurn: true });
+      }
+
+      setTimeout(() => {
+        setCurrentPageIndex(targetIndex);
+        setLastEditPosition(0);
+        setPageTurnState({ animatingPageId: null, direction: null, isFinalTurn: false });
+      }, pageToAnimateId ? ANIMATION_DURATION : 0);
+
     } else {
       alert(`Page number must be between 1 and ${numPages || 1}`);
     }
     setGoToPageInput('');
   };
 
-  // Early return if diary data is not yet loaded or is invalid
+  useEffect(() => {
+    return () => {
+        if (debounceTimeoutRef.current) {
+            clearTimeout(debounceTimeoutRef.current);
+        }
+    };
+  }, []);
+
+
   if (!currentDiary || !currentDiary.pages) {
     return <div className={styles.loading}>Loading diary data...</div>;
   }
-  // If pages array is empty (even after initial effect tried to add one), show loading or empty state
   if (currentDiary.pages.length === 0) {
-    return <div className={styles.loading}>No pages in diary. Creating one...</div>; 
+    return <div className={styles.loading}>Initializing diary...</div>;
   }
   
-  // currentPageIndex should be safe now due to the useEffect above.
-  // However, as a final safeguard before rendering, ensure it's within bounds.
   const finalSafeCurrentPageIndex = Math.min(Math.max(0, currentPageIndex), currentDiary.pages.length - 1);
   const currentPageData = currentDiary.pages[finalSafeCurrentPageIndex];
 
   if (!currentPageData) {
-    // This should ideally not be reached if the above logic is correct
     console.error("Error: currentPageData is undefined. Diary State:", currentDiary, "Index:", finalSafeCurrentPageIndex);
     return <div className={styles.error}>Error loading page data. Please try again.</div>;
   }
 
-  let animationClass = '';
-  if (pageTurnState.animatingPageId === currentPageData.id) {
-    if (pageTurnState.direction === 'next') {
-      animationClass = pageStyles.pageCurlNext;
-    } else if (pageTurnState.direction === 'prev') {
-      animationClass = pageStyles.pageCurlPrev;
-    }
+  let animationClassForPage = '';
+  if (pageTurnState.isFinalTurn && pageTurnState.animatingPageId === currentPageData.id && pageTurnState.direction) {
+    animationClassForPage = pageTurnState.direction === 'next' ? pageStyles.pageCurlNextFinal : pageStyles.pageCurlPrevFinal;
   }
   
-  const isNavDisabled = pageTurnState.animatingPageId !== null;
+  const isNavDisabledByAnimation = pageTurnState.isFinalTurn;
+  const isPageBeingAnimatedAway = pageTurnState.isFinalTurn && pageTurnState.animatingPageId === currentPageData.id;
+  const isCurrentPageTrulyFocused = (currentPageIndex === finalSafeCurrentPageIndex) && !isPageBeingAnimatedAway;
+
 
   return (
     <div className={styles.diaryViewContainer}>
       <div className={styles.diaryHeader}>
-        <button onClick={() => navigate('/')} className={styles.controlButton} title="Home" disabled={isNavDisabled}><FaHome /></button>
-        <button onClick={navigateToPreviousPage} className={styles.controlButton} title="Previous Page" disabled={finalSafeCurrentPageIndex === 0 || isNavDisabled}><FaArrowLeft /></button>
-        <button 
-            onClick={navigateToNextPage} 
-            className={styles.controlButton} 
-            title="Next Page" 
-            disabled={(finalSafeCurrentPageIndex >= currentDiary.pages.length -1 && currentDiary.pages.length >= 200 /* Practical limit */) || isNavDisabled }>
+         <button onClick={() => navigate('/')} className={styles.controlButton} title="Home" disabled={isNavDisabledByAnimation}><FaHome /></button>
+        <button onClick={navigateToPreviousPage} className={styles.controlButton} title="Previous Page" disabled={finalSafeCurrentPageIndex === 0 || isNavDisabledByAnimation}><FaArrowLeft /></button>
+        <button
+            onClick={navigateToNextPage}
+            className={styles.controlButton}
+            title="Next Page"
+            disabled={
+                (finalSafeCurrentPageIndex >= (currentDiary.pages.length || 1) - 1 && 
+                (currentDiary.pages[finalSafeCurrentPageIndex]?.content || '').trim().length === 0 &&
+                currentDiary.pages.length > 0 
+                ) || isNavDisabledByAnimation || currentDiary.pages.length >= 200
+            }>
             <FaArrowRight />
         </button>
         <h2>{currentDiary.name}</h2>
@@ -266,11 +335,11 @@ const DiaryView = ({ diaries, setDiaries }) => {
             onChange={e => setGoToPageInput(e.target.value)}
             placeholder="Page #"
             className={styles.goToPageInput}
-            disabled={isNavDisabled}
+            disabled={isNavDisabledByAnimation}
           />
-          <button type="submit" className={styles.controlButtonSmall} disabled={isNavDisabled}>Go</button>
+          <button type="submit" className={styles.controlButtonSmall} disabled={isNavDisabledByAnimation}>Go</button>
         </form>
-        <button onClick={() => alert('Diary content is auto-saved.')} className={`${styles.controlButton} ${styles.saveButton}`} title="Save" disabled={isNavDisabled}><FaSave /></button>
+        <button onClick={() => manualSaveDiary(currentDiary.pages)} className={`${styles.controlButton} ${styles.saveButton}`} title="Save" disabled={isNavDisabledByAnimation}><FaSave /></button>
       </div>
       <div className={styles.pageContainer}>
         <Page
@@ -279,14 +348,14 @@ const DiaryView = ({ diaries, setDiaries }) => {
           onContentChange={handleContentChange}
           onPageFull={handleContentMovement}
           onNavigatePrev={navigateToPreviousPage} 
-          onNavigateNext={navigateToNextPage}
+          onNavigateNext={navigateToNextPage}   
           initialFocusPosition={lastEditPosition}
-          isCurrentPageFocused={!pageTurnState.animatingPageId} 
-          animationClass={animationClass}
+          isCurrentPageFocused={isCurrentPageTrulyFocused}
+          animationClass={animationClassForPage} 
         />
       </div>
       <div className={styles.pageIndicator}>
-        Page {currentPageData.pageNumber} of {currentDiary.pages.length}
+        Page {currentPageData.pageNumber || (finalSafeCurrentPageIndex + 1)} of {currentDiary.pages.length}
       </div>
     </div>
   );
