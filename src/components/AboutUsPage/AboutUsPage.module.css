@@ -8,3 +8,16 @@
   max-width: 600px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
+.socialLinks {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-top: 20px;
+  text-decoration: none;
+  color: #333;
+  font-size: 1.5em;
+}
+.socialLinks :hover {
+  color: #0073e6;
+  transform: scale(1.1);
+}

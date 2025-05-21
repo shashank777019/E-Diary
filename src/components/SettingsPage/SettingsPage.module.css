@@ -1,10 +1,93 @@
-/* Add at least a basic container style to prevent runtime errors */
+/* src/components/SettingsPage/SettingsPage.module.css */
 .container {
   padding: 20px;
-  text-align: center;
-  background: #f9f9f9;
+  max-width: 800px;
+  margin: 20px auto;
+  background-color: var(--page-bg-color, #fff);
   border-radius: 8px;
-  margin: 40px auto;
-  max-width: 600px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+body.dark-theme .container {
+  background-color: var(--page-bg-color-dark, #2c2c44); /* Ensure you have dark theme variables */
+  color: var(--text-color-dark, #e0e0e0);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+
+.container h1 {
+  text-align: center;
+  margin-bottom: 30px;
+  color: var(--header-color, #333);
+}
+
+body.dark-theme .container h1 {
+ color: var(--header-color-dark, #f0f0f0);
+}
+
+.container p {
+  text-align: center;
+  margin-bottom: 20px;
+  color: var(--text-secondary-color, #555);
+}
+
+body.dark-theme .container p {
+  color: var(--text-secondary-color-dark, #bbb);
+}
+
+.section {
+  margin-bottom: 30px;
+  padding: 20px;
+  border: 1px solid var(--border-color, #eee);
+  border-radius: 6px;
+  background-color: var(--section-bg-color, #f9f9f9);
+}
+
+body.dark-theme .section {
+  border-color: var(--border-color-dark, #444);
+  background-color: var(--section-bg-color-dark, #3a3a5a);
+}
+
+.section h2 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border-color, #ddd);
+  padding-bottom: 10px;
+  color: var(--subheader-color, #444);
+}
+
+body.dark-theme .section h2 {
+  border-bottom-color: var(--border-color-dark, #555);
+  color: var(--subheader-color-dark, #ccc);
+}
+
+.actionButton {
+  background-color: var(--button-bg-color, #5a3e8d); /* Primary color from your theme */
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 20px; /* Rounded button */
+  font-size: 1em;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  display: inline-flex; /* To align icon and text */
+  align-items: center;
+  gap: 8px; /* Space between icon and text */
+  margin-right: 10px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 5px rgba(90, 62, 141, 0.2);
+}
+
+.actionButton:hover {
+  background-color: var(--button-hover-bg-color, #482f73); /* Darker shade on hover */
+  transform: translateY(-1px);
+}
+
+body.dark-theme .actionButton {
+  background-color: var(--button-bg-color-dark, #a991d4);
+  color: var(--button-text-color-dark, #1a1a2e);
+  box-shadow: 0 2px 5px rgba(169, 145, 212, 0.2);
+}
+
+body.dark-theme .actionButton:hover {
+  background-color: var(--button-hover-bg-color-dark, #9374c2);
 }

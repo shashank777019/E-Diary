@@ -20,6 +20,7 @@ const DiaryView = ({ diaries, setDiaries }) => {
   const isInitialLoadForDiaryIdRef = useRef(true);
   const debounceTimeoutRef = useRef(null);
 
+  
   useEffect(() => {
     const foundDiary = diaries.find(d => d.id === diaryId);
     if (foundDiary) {
